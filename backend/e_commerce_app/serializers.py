@@ -1,32 +1,48 @@
 from rest_framework import serializers
-from .models import Product,Client,Address,Provider,Command
-class AddressSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Address
-        fields = '__all__'
+from .models import Provider, Product, Client, Command
+
+
 class ProviderSerializer(serializers.ModelSerializer):
-    address=AddressSerializer(read_only=True)
     class Meta:
         model = Provider
-        fields = '__all__'
+        fields = ['id', 'name', 'password', 'email', 'phone', 'address']
+        extra_kwargs = {
+            'password': {'write_only': True},
+        }
 
 class ProductSerializer(serializers.ModelSerializer):
-    provider=ProviderSerializer()#read_only=True)
+    provider = serializers.PrimaryKeyRelatedField(queryset=Provider.objects.all(), required=False)
+    provider_name = serializers.CharField(source='provider.name', read_only=True)
     class Meta:
         model = Product
-        fields = '__all__'
+        fields = ['id', 'label', 'price', 'stock', 'image', 'description', 'provider', 'provider_name']
+
 class ClientSerializer(serializers.ModelSerializer):
-    address=AddressSerializer(read_only=True)
-    client_products=serializers.SerializerMethodField()
+    typeClient = serializers.CharField(source='get_typeClient_display', read_only=True)
+    address = serializers.CharField(required=False)
     class Meta:
         model = Client
-        fields='__all__'
-        #fields = ('name','email','phone','typeClient')
+        fields = ['id', 'name', 'password', 'email', 'phone', 'address', 'familyName', 'typeClient']
+        extra_kwargs = {
+            'password': {'write_only': True},
+        }
 
 class CommandSerializer(serializers.ModelSerializer):
-    product=ProductSerializer(read_only=True)
-    client=ClientSerializer(read_only=True)
-    
     class Meta:
         model = Command
-        fields = '__all__'
+        fields = ('id', 'client', 'product', 'quantity','date_cmd','amount')
+        extra_kwargs = {
+            'client': {'required': True},
+            'product': {'required': True},
+            'quantity': {'required': True},
+        }  
+
+
+class AdminSerializer(serializers.ModelSerializer):
+    address = serializers.CharField(required=False)
+    class Meta:
+        model = Client
+        fields = ['id', 'name', 'password', 'email', 'phone', 'address']
+        extra_kwargs = {
+            'password': {'write_only': True},
+        }

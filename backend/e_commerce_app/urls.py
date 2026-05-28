@@ -1,19 +1,14 @@
 from django.urls import include, path
 from rest_framework import routers
-from .views import AddressViewSet, ClientViewSet, CommandViewSet,ProductViewSet, ProviderViewSet
-from e_commerce_app.views import ProductViewSet,ClientViewSet
+from . import views
 
-router=routers.DefaultRouter()
-router.register(r'products',ProductViewSet,basename='product')
-router.register(r'clients',ClientViewSet,basename='client')
-router.register(r'addresses',AddressViewSet,basename='address')
-router.register(r'providers',ProviderViewSet,basename='provider')
-router.register(r'commands',CommandViewSet,basename='command')
+router = routers.DefaultRouter()
+router.register(r'providers', views.ProviderViewSet)
+router.register(r'products', views.ProductViewSet)
+router.register(r'clients', views.ClientViewSet)
+router.register(r'commands', views.CommandViewSet)
+router.register(r'admins', views.AdminViewSet)
+
 urlpatterns = [
-    
-    path('',include(router.urls)),
-    path('max_min_price/', ProductViewSet.as_view({'get': 'max_min_price'}), name='max_min_price'),
-    path(r'client_products', CommandViewSet.as_view({'get': 'client_products'}), name='client_products'),
-    path('not_satisfied/',CommandViewSet.as_view({'get':'not_satisfied_clients'})
-         , name='not_satisfied_clients'),
+    path('', include(router.urls)),
 ]

@@ -1,17 +1,25 @@
-from django.shortcuts import render
-from .models import Address, Product, Client, Provider, Command
-from rest_framework import viewsets, authentication, permissions
-from rest_framework.response import Response
+from rest_framework import viewsets
+from .models import  Provider, Product, Client, Command, Admin
+from .serializers import (
+    ProviderSerializer,
+    ProductSerializer,
+    ClientSerializer,
+    CommandSerializer,
+    AdminSerializer,
+)
 from rest_framework.decorators import action
-from rest_framework import status
-from django.db.models import Max, Min
-from django.utils import timezone
-from .serializers import AddressSerializer, CommandSerializer, ProductSerializer, ClientSerializer, ProviderSerializer
+from rest_framework.response import Response
+
+
+
+class ProviderViewSet(viewsets.ModelViewSet):
+    queryset = Provider.objects.all()
+    serializer_class = ProviderSerializer
+    
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-
     @action(methods=['get'], detail=False)
     def in_stock(self, request):
         products = Product.objects.filter(stock__gt=0).order_by('label')
@@ -23,100 +31,93 @@ class ProductViewSet(viewsets.ModelViewSet):
         products = Product.objects.filter(stock=0).order_by('label')
         serializer = ProductSerializer(products, many=True)
         return Response(serializer.data)
+    @action(methods=['get'], detail=False)
+    def get_product_by_provider(self, request):
+        provider_id = request.query_params.get('provider_id')
+        if provider_id:
+            products = Product.objects.filter(provider__id=provider_id)
+            serializer = ProductSerializer(products, many=True)
+            return Response(serializer.data)
+        return Response({"error": "Provider ID not provided"}, status=400)
+    @action(methods=['get'], detail=False)
+    def get_product_by_price(self, request):
+        min_price = request.query_params.get('min_price')
+        max_price = request.query_params.get('max_price')
+        if min_price and max_price:
+            products = Product.objects.filter(price__gte=min_price, price__lte=max_price)
+            serializer = ProductSerializer(products, many=True)
+            return Response(serializer.data)
+        return Response({"error": "Price range not provided"}, status=400)    
 
 class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all()
     serializer_class = ClientSerializer
-
-    @action(methods=['get'], detail=True)
-    def get_products(self, request, pk=None):
-        client = Client.objects.get(id=pk)
-        products = client.products.all()
-        serializer = ProductSerializer(products, many=True)
-        return Response(serializer.data)
-
-    @action(methods=['post'], detail=True)
-    def command_product(self, request, pk=None):
-        client = Client.objects.get(id=pk)
-        product = Product.objects.get(id=request.data['product_id'])
-        client.client_products.add(product)
-        client.save()
-        return Response({'message': f'Command of product {product.label} by the client {client.name} was accepted'})
-
-    @action(methods=['delete'], detail=True)
-    def remove_product(self, request, pk=None):
-        client = Client.objects.get(id=pk)
-        product = Product.objects.get(id=request.data['product_id'])
-        client.products.remove(product)
-        client.save()
-        return Response({'message': 'Product removed from the client'})
-
-    @action(methods=['get', 'post'], detail=True)
-    def products(self, request, pk=None):
-        if request.method == 'GET':
-            return self.get_products(request, pk)
-        elif request.method == 'POST':
-            return self.add_product(request, pk)
-
-    @action(methods=['get', 'post', 'delete'], detail=True)
-    def products2(self, request, pk=None):
-        if request.method == 'GET':
-            return self.get_products(request, pk)
-        elif request.method == 'POST':
-            return self.add_product(request, pk)
-        elif request.method == 'DELETE':
-            return self.remove_product(request, pk)
-
-class AddressViewSet(viewsets.ModelViewSet):
-    queryset = Address.objects.all()
-    serializer_class = AddressSerializer
-
-class ProviderViewSet(viewsets.ModelViewSet):
-    queryset = Provider.objects.all()
-    serializer_class = ProviderSerializer    
+    @action(methods=['get'], detail=False)
+    def get_client_by_email(self, request):
+        email = request.query_params.get('email')
+        if email:
+            client = Client.objects.filter(email=email).first()
+            if client:
+                serializer = ClientSerializer(client)
+                return Response(serializer.data)
+            return Response({"error": "Client not found"}, status=404)
+        return Response({"error": "Email not provided"}, status=400)
+    @action(methods=['get'], detail=False)
+    def get_client_by_type(self, request):
+        type_client = request.query_params.get('typeClient')
+        if type_client:
+            clients = Client.objects.filter(typeClient=type_client)
+            serializer = ClientSerializer(clients, many=True)
+            return Response(serializer.data)
+        return Response({"error": "Type client not provided"}, status=400)
 
 class CommandViewSet(viewsets.ModelViewSet):
     queryset = Command.objects.all()
     serializer_class = CommandSerializer
-
-    @action(detail=True, methods=['get'])
-    def client_products(self, request):
-        client_id = request.query_params.get('client_id', None)
-        start_date = request.query_params.get('start_date', None)
-        end_date = request.query_params.get('end_date', None)
-        
-        if client_id and start_date and end_date:
-            try:
-                client = Client.objects.get(pk=client_id)
-                start_date = timezone.datetime.strptime(start_date, '%Y-%m-%d').date()
-                end_date = timezone.datetime.strptime(end_date, '%Y-%m-%d').date()
-            except (ValueError, Client.DoesNotExist):
-                return Response(status=status.HTTP_400_BAD_REQUEST)
-            
-            commands = Command.objects.filter(client=client, date_cmd__range=[start_date, end_date])
-            product_ids = [command.product.id for command in commands]
-            products = Product.objects.filter(id__in=product_ids, stock__gt=0).order_by('label')
-            serializer = ProductSerializer(products, many=True)
+    @action(methods=['get'], detail=False)
+    def get_command_by_client(self, request):
+        client_id = request.query_params.get('client_id')
+        if client_id:
+            commands = Command.objects.filter(client__id=client_id)
+            serializer = CommandSerializer(commands, many=True)
             return Response(serializer.data)
+        return Response({"error": "Client ID not provided"}, status=400)
+    @action(methods=['get'], detail=False)
+    def get_command_by_product(self, request):
+        product_id = request.query_params.get('product_id')
+        if product_id:
+            commands = Command.objects.filter(product__id=product_id)
+            serializer = CommandSerializer(commands, many=True)
+            return Response(serializer.data)
+        return Response({"error": "Product ID not provided"}, status=400)
+    @action(methods=['get'], detail=False)
+    def get_command_by_date(self, request):
+        date_cmd = request.query_params.get('date_cmd')
+        if date_cmd:
+            commands = Command.objects.filter(date_cmd=date_cmd)
+            serializer = CommandSerializer(commands, many=True)
+            return Response(serializer.data)
+        return Response({"error": "Date not provided"}, status=400)
+    
+class AdminViewSet(viewsets.ModelViewSet):
+    queryset = Admin.objects.all()
+    serializer_class = AdminSerializer
+    @action(methods=['get'], detail=False)
+    def get_admin_by_email(self, request):
+        email = request.query_params.get('email')
+        if email:
+            admin = Admin.objects.filter(email=email).first()
+            if admin:
+                serializer = AdminSerializer(admin)
+                return Response(serializer.data)
+            return Response({"error": "Admin not found"}, status=404)
+        return Response({"error": "Email not provided"}, status=400)
 
-        return Response(status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['get'])
-    def not_satisfied_clients(self, request):
-        start_date = request.query_params.get('start_date', None)
-        end_date = request.query_params.get('end_date', None)
+
+
+
+
+
+
         
-        if start_date and end_date:
-            try:
-                start_date = timezone.datetime.strptime(start_date, '%Y-%m-%d').date()
-                end_date = timezone.datetime.strptime(end_date, '%Y-%m-%d').date()
-            except ValueError:
-                return Response(status=status.HTTP_400_BAD_REQUEST)
-            
-            commands = Command.objects.filter(date_cmd__range=[start_date, end_date])
-            client_ids = [command.client.id for command in commands]
-            clients = Client.objects.filter(id__in=client_ids, client_products__stock__lte=0).distinct().order_by('name')
-            serializer = ClientSerializer(clients, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-
-        return Response(status=status.HTTP_400_BAD_REQUEST)
